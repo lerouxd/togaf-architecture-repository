@@ -1,0 +1,233 @@
+# azure-pipelines.yml
+# TOGAF Architecture Repository — CI/CD Pipeline
+# Cyber & Audit Review Gate · Sunrise Medical Group IT
+#
+# Variable group required (Library → Variable groups → togaf-dashboard-secrets):
+#   SP_SITE_URL_ARCHITECTS  — https://sunmed.sharepoint.com/sites/IT-Architecture
+#   SP_SITE_URL_TECHSUPPORT — https://sunmed.sharepoint.com/sites/IT-TechSupport
+#   SP_CLIENT_ID            — Azure AD app registration client ID (app-only auth)
+#   SP_CLIENT_SECRET        — App registration secret (mark as secret)
+#   SP_TENANT_ID            — sunmed.global tenant ID
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - dashboard.js
+      - index.html
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  - group: togaf-dashboard-secrets
+
+# ══════════════════════════════════════════════════════════
+#  STAGE 1 — Security & Quality Gate
+#  All checks must pass before any build or deploy proceeds.
+# ══════════════════════════════════════════════════════════
+stages:
+- stage: SecurityScan
+  displayName: '1 · Security & Quality Gate'
+  jobs:
+  - job: StaticAnalysis
+    displayName: 'Static analysis'
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+
+    - checkout: self
+
+    - script: |
+        echo "=== Secret Scan ===" | tee security-report.txt
+        # Flag hardcoded password/secret/key/token patterns
+        if grep -rE "(password|secret|api[_-]?key|bearer)\s*[:=]\s*['\"][^'\"]{8,}" dashboard.js; then
+          echo "FAIL: Potential secrets detected in dashboard.js" | tee -a security-report.txt
+          exit 1
+        fi
+        echo "PASS: No hardcoded secrets detected" | tee -a security-report.txt
+      displayName: 'Secret scan'
+
+    - script: |
+        echo "" >> security-report.txt
+        echo "=== CSP Validation ===" | tee -a security-report.txt
+        FAIL=0
+        grep -q "unsafe-eval" index.html          && echo "FAIL: unsafe-eval in CSP"              | tee -a security-report.txt && FAIL=1
+        grep -q "script-src.*unsafe-inline" index.html && echo "FAIL: unsafe-inline in script-src" | tee -a security-report.txt && FAIL=1
+        grep -q "object-src 'none'"         index.html || echo "WARN: object-src 'none' missing"  | tee -a security-report.txt
+        grep -q "base-uri 'self'"           index.html || echo "WARN: base-uri 'self' missing"    | tee -a security-report.txt
+        grep -q "form-action 'self'"        index.html || echo "WARN: form-action 'self' missing" | tee -a security-report.txt
+        [ $FAIL -eq 0 ] && echo "PASS: CSP directives validated" | tee -a security-report.txt
+        exit $FAIL
+      displayName: 'CSP directive validation'
+
+    - script: |
+        echo "" >> security-report.txt
+        echo "=== Inline Handler Scan ===" | tee -a security-report.txt
+        if grep -inE ' on(click|load|error|submit|change|keyup|keydown|mouseover)\s*=' index.html; then
+          echo "FAIL: Inline event handlers found in index.html" | tee -a security-report.txt
+          exit 1
+        fi
+        echo "PASS: No inline event handlers in index.html" | tee -a security-report.txt
+      displayName: 'Inline event handler scan'
+
+    - script: |
+        echo "" >> security-report.txt
+        echo "=== innerHTML / XSS Audit ===" | tee -a security-report.txt
+        COUNT=$(grep -c "\.innerHTML\s*=" dashboard.js || true)
+        echo "innerHTML assignment count: $COUNT" | tee -a security-report.txt
+        # Flag any innerHTML assignment not using esc() or a literal safe string
+        UNESCAPED=$(grep -nP "\.innerHTML\s*=\s*(?!.*esc\()" dashboard.js | grep -v "innerHTML = ''" | grep -v "innerHTML = \`\`" || true)
+        if [ -n "$UNESCAPED" ]; then
+          echo "WARN: Review these innerHTML assignments for esc() coverage:" | tee -a security-report.txt
+          echo "$UNESCAPED" | tee -a security-report.txt
+        else
+          echo "PASS: All innerHTML assignments appear to use esc() escaping" | tee -a security-report.txt
+        fi
+      displayName: 'innerHTML / XSS surface audit'
+
+    - script: |
+        echo "" >> security-report.txt
+        echo "=== File Size Gate ===" | tee -a security-report.txt
+        SIZE=$(wc -c < dashboard.js)
+        echo "dashboard.js: $SIZE bytes" | tee -a security-report.txt
+        # >200KB likely indicates embedded data — flag for review
+        if [ "$SIZE" -gt 204800 ]; then
+          echo "FAIL: dashboard.js exceeds 200KB — potential data embedding risk" | tee -a security-report.txt
+          exit 1
+        fi
+        echo "PASS: File size within limit" | tee -a security-report.txt
+      displayName: 'File size gate'
+
+    - script: |
+        echo "" >> security-report.txt
+        echo "=== File Integrity (SHA-256) ===" | tee -a security-report.txt
+        sha256sum dashboard.js index.html | tee -a security-report.txt
+      displayName: 'File integrity checksums'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish security report'
+      condition: always()
+      inputs:
+        pathToPublish: security-report.txt
+        artifactName: security-report
+
+# ══════════════════════════════════════════════════════════
+#  STAGE 2 — Build
+#  Full build (architects) + read-only build (tech support).
+# ══════════════════════════════════════════════════════════
+- stage: Build
+  displayName: '2 · Build Variants'
+  dependsOn: SecurityScan
+  condition: succeeded()
+  jobs:
+  - job: BuildVariants
+    displayName: 'Full + read-only variants'
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+
+    - checkout: self
+
+    - script: |
+        mkdir -p dist/full dist/readonly
+        cp index.html dashboard.js dist/full/
+        echo "Full variant ready"
+      displayName: 'Build: full (architects)'
+
+    - script: |
+        # Flip READ_ONLY flag for the tech-support build.
+        # dashboard.js declares: const READ_ONLY = false;
+        sed 's/const READ_ONLY = false;/const READ_ONLY = true;/' dashboard.js > dist/readonly/dashboard.js
+        cp index.html dist/readonly/index.html
+        # Verify the flag was flipped — fail the build if not
+        grep -q "const READ_ONLY = true;" dist/readonly/dashboard.js \
+          || (echo "ERROR: READ_ONLY flag not set in readonly build" && exit 1)
+        echo "Read-only variant ready"
+      displayName: 'Build: read-only (tech support)'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish build artifacts'
+      inputs:
+        pathToPublish: dist
+        artifactName: dashboard-artifacts
+
+# ══════════════════════════════════════════════════════════
+#  STAGE 3 — Deploy
+#  Only runs on main branch. Requires manual approval gates
+#  configured in Azure DevOps Environments (Environments →
+#  togaf-architects and togaf-techsupport → Approvals).
+# ══════════════════════════════════════════════════════════
+- stage: Deploy
+  displayName: '3 · Deploy to SharePoint'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+
+  # ── Full version → Architects SharePoint site ───────────
+  - deployment: DeployArchitects
+    displayName: 'Deploy full (Architects)'
+    pool:
+      vmImage: windows-latest
+    environment: togaf-architects        # Configure approvals here in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadBuildArtifacts@1
+            inputs:
+              artifactName: dashboard-artifacts
+              downloadPath: $(System.ArtifactsDirectory)
+
+          - task: PowerShell@2
+            displayName: 'Upload to SharePoint Site Assets (Architects)'
+            inputs:
+              targetType: inline
+              script: |
+                Install-Module PnP.PowerShell -Force -Scope CurrentUser -ErrorAction Stop
+                $secret = ConvertTo-SecureString '$(SP_CLIENT_SECRET)' -AsPlainText -Force
+                Connect-PnPOnline `
+                  -Url       '$(SP_SITE_URL_ARCHITECTS)' `
+                  -ClientId  '$(SP_CLIENT_ID)'           `
+                  -ClientSecret $secret                  `
+                  -Tenant    '$(SP_TENANT_ID)'
+                $folder = 'SiteAssets/togaf-dashboard'
+                Add-PnPFile -Path "$(System.ArtifactsDirectory)\dashboard-artifacts\full\index.html"    -Folder $folder
+                Add-PnPFile -Path "$(System.ArtifactsDirectory)\dashboard-artifacts\full\dashboard.js"  -Folder $folder
+                Write-Host "Deployed full dashboard to $('$(SP_SITE_URL_ARCHITECTS)')/$folder"
+
+  # ── Read-only version → Tech Support SharePoint site ────
+  - deployment: DeployTechSupport
+    displayName: 'Deploy read-only (Tech Support)'
+    pool:
+      vmImage: windows-latest
+    environment: togaf-techsupport       # Configure approvals here in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadBuildArtifacts@1
+            inputs:
+              artifactName: dashboard-artifacts
+              downloadPath: $(System.ArtifactsDirectory)
+
+          - task: PowerShell@2
+            displayName: 'Upload to SharePoint Site Assets (Tech Support)'
+            inputs:
+              targetType: inline
+              script: |
+                Install-Module PnP.PowerShell -Force -Scope CurrentUser -ErrorAction Stop
+                $secret = ConvertTo-SecureString '$(SP_CLIENT_SECRET)' -AsPlainText -Force
+                Connect-PnPOnline `
+                  -Url       '$(SP_SITE_URL_TECHSUPPORT)' `
+                  -ClientId  '$(SP_CLIENT_ID)'             `
+                  -ClientSecret $secret                    `
+                  -Tenant    '$(SP_TENANT_ID)'
+                $folder = 'SiteAssets/togaf-dashboard'
+                Add-PnPFile -Path "$(System.ArtifactsDirectory)\dashboard-artifacts\readonly\index.html"   -Folder $folder
+                Add-PnPFile -Path "$(System.ArtifactsDirectory)\dashboard-artifacts\readonly\dashboard.js" -Folder $folder
+                Write-Host "Deployed read-only dashboard to $('$(SP_SITE_URL_TECHSUPPORT)')/$folder"
