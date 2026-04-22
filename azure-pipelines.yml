@@ -23,8 +23,7 @@ pr:
     include:
       - main
 
-variables:
-  - group: togaf-dashboard-secrets
+
 
 # ══════════════════════════════════════════════════════════
 #  STAGE 1 — Security & Quality Gate
