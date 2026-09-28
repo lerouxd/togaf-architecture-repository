@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<title>Sunrise Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/>
+<style>
+:root{
+  --ground:#e9eef2; --surface:#fbfcfd; --surface-2:#f1f4f7; --line:#d5dde4;
+  --ink:#15202b; --muted:#5a6878; --faint:#8894a1;
+  --accent:#0d6b66; --accent-ink:#ffffff; --accent-soft:#d6ece9;
+  --op:#e3ebf0; --op-ink:#0d4f4b; --fn:#eef2f5;
+  --warn-bg:#fff4dc; --warn-ink:#7a4b00; --ok-bg:#dcf2e7; --ok-ink:#0f5a36; --err:#b42318;
+  --shadow:0 1px 2px rgba(21,32,43,.06),0 8px 24px rgba(21,32,43,.06);
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0e1418; --surface:#161e24; --surface-2:#1c262e; --line:#2a3640;
+    --ink:#e4ebf0; --muted:#9aa8b4; --faint:#6d7b87;
+    --accent:#3fbfb2; --accent-ink:#06201e; --accent-soft:#163a37;
+    --op:#1f3033; --op-ink:#8fe0d6; --fn:#1b242b;
+    --warn-bg:#3a2d10; --warn-ink:#f3cf82; --ok-bg:#12352a; --ok-ink:#8fe0b5; --err:#ff8a7a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0e1418; --surface:#161e24; --surface-2:#1c262e; --line:#2a3640;
+  --ink:#e4ebf0; --muted:#9aa8b4; --faint:#6d7b87;
+  --accent:#3fbfb2; --accent-ink:#06201e; --accent-soft:#163a37;
+  --op:#1f3033; --op-ink:#8fe0d6; --fn:#1b242b;
+  --warn-bg:#3a2d10; --warn-ink:#f3cf82; --ok-bg:#12352a; --ok-ink:#8fe0b5; --err:#ff8a7a;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:flex;flex-direction:column;gap:16px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column}
+.brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.brand span{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:7px 12px;border-radius:7px;font-weight:500;font-size:13px;color:var(--muted);cursor:pointer}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+
+/* calculator */
+.calc{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+.calc-main{padding:16px;display:flex;flex-direction:column;gap:12px}
+.screen{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-height:96px;justify-content:flex-end}
+.screen-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.flags{display:flex;gap:6px}
+.flag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:var(--op);color:var(--op-ink)}
+.flag.off{opacity:.35}
+.expr{font-family:var(--mono);font-size:16px;color:var(--muted);text-align:right;overflow-x:auto;white-space:nowrap;min-height:24px;scrollbar-width:thin}
+.result{font-family:var(--mono);font-size:34px;font-weight:500;text-align:right;overflow-x:auto;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.15}
+.result.preview{color:var(--faint)}
+.result.error{color:var(--err);font-size:18px}
+.keys{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.key{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:11px 4px;font-size:15px;font-weight:500;cursor:pointer;font-family:var(--mono);transition:background .08s,transform .05s;min-width:0}
+.key:hover{background:var(--surface-2)}
+.key:active{transform:translateY(1px)}
+.key.fn{background:var(--fn);font-size:13px;color:var(--muted)}
+.key.op{background:var(--op);color:var(--op-ink);font-weight:600}
+.key.eq{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+.key.eq:hover{filter:brightness(1.07)}
+.key.clr{color:var(--err)}
+.key.mem{font-size:12px;padding-block:7px;color:var(--muted);background:transparent}
+.side{padding:16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.side-head{display:flex;justify-content:space-between;align-items:center}
+.linkbtn{border:0;background:none;color:var(--accent);font-size:12px;font-weight:500;cursor:pointer;padding:2px 4px}
+.history{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:420px}
+.history li button{width:100%;text-align:right;border:0;background:transparent;border-radius:6px;padding:6px 8px;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.history li button:hover{background:var(--surface-2)}
+.h-expr{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+.h-res{font-family:var(--mono);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}
+.empty{font-size:12px;color:var(--faint);padding:6px 2px}
+.hint{font-size:12px;color:var(--muted)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--surface-2)}
+
+/* converter forms */
+.conv{padding:18px;display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px;flex:1 1 160px;min-width:0}
+.field label{font-size:12px;font-weight:500;color:var(--muted)}
+.input,.select{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 10px;font-size:15px;min-width:0}
+.input{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.input:focus,.select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.swap{flex:0 0 auto;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;width:42px;height:41px;cursor:pointer;font-size:16px;color:var(--accent)}
+.swap:hover{background:var(--op)}
+.answer{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.answer-val{font-family:var(--mono);font-size:30px;font-weight:500;font-variant-numeric:tabular-nums;word-break:break-all}
+.answer-sub{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:500;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:4px 10px;border-radius:999px}
+.status.live{background:var(--ok-bg);color:var(--ok-ink)}
+.status.example{background:var(--warn-bg);color:var(--warn-ink)}
+.status::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.note{font-size:12px;color:var(--muted);max-width:68ch}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td .rate-input{width:130px;text-align:right;padding:4px 8px;font-size:13px}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:var(--surface-2)}
+.code{font-family:var(--mono);font-weight:600}
+.cname{color:var(--muted)}
+details summary{cursor:pointer;font-weight:500;font-size:13px}
+details[open] summary{margin-bottom:10px}
+.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.card{padding:16px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-size:14px;font-weight:600}
+.mini{font-family:var(--mono);font-size:22px;font-weight:500;font-variant-numeric:tabular-nums;word-break:break-all}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:var(--mono)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.vat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vat-cell{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.vat-cell .mini{font-size:17px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:all .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:760px){
+  .calc,.split{grid-template-columns:minmax(0,1fr)}
+  .history{max-height:220px}
+  .result{font-size:28px}
+  .vat-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Sunrise Calculator</h1>
+      <span>Scientific calculator · currency · units · percent &amp; VAT</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Calculator tools">
+      <button class="tab" role="tab" id="tab-calculator" data-tab="calculator" aria-controls="view-calculator">Calculator</button>
+      <button class="tab" role="tab" id="tab-currency" data-tab="currency" aria-controls="view-currency">Currency</button>
+      <button class="tab" role="tab" id="tab-units" data-tab="units" aria-controls="view-units">Units</button>
+      <button class="tab" role="tab" id="tab-percent" data-tab="percent" aria-controls="view-percent">Percent &amp; VAT</button>
+    </nav>
+  </header>
+
+  <!-- ═════════ CALCULATOR ═════════ -->
+  <section id="view-calculator" role="tabpanel" aria-labelledby="tab-calculator">
+    <div class="calc">
+      <div class="panel calc-main">
+        <div class="screen" aria-live="polite">
+          <div class="screen-top">
+            <div class="flags">
+              <span class="flag" id="flag-angle">DEG</span>
+              <span class="flag off" id="flag-mem">M</span>
+            </div>
+            <div class="expr" id="expr" aria-label="Expression"></div>
+          </div>
+          <div class="result" id="result">0</div>
+        </div>
+        <div class="keys" id="keys-mem">
+          <button class="key mem" data-k="MC">MC</button>
+          <button class="key mem" data-k="MR">MR</button>
+          <button class="key mem" data-k="M+">M+</button>
+          <button class="key mem" data-k="M-">M−</button>
+          <button class="key mem" data-k="ANGLE" id="key-angle">DEG/RAD</button>
+        </div>
+        <div class="keys" id="keys">
+          <button class="key fn" data-k="sin(">sin</button>
+          <button class="key fn" data-k="cos(">cos</button>
+          <button class="key fn" data-k="tan(">tan</button>
+          <button class="key fn" data-k="(">(</button>
+          <button class="key fn" data-k=")">)</button>
+
+          <button class="key fn" data-k="asin(">sin⁻¹</button>
+          <button class="key fn" data-k="acos(">cos⁻¹</button>
+          <button class="key fn" data-k="atan(">tan⁻¹</button>
+          <button class="key fn" data-k="^2">x²</button>
+          <button class="key fn" data-k="√(">√</button>
+
+          <button class="key fn" data-k="ln(">ln</button>
+          <button class="key fn" data-k="log(">log</button>
+          <button class="key fn" data-k="^">xʸ</button>
+          <button class="key fn" data-k="π">π</button>
+          <button class="key fn" data-k="e">e</button>
+
+          <button class="key fn" data-k="!">n!</button>
+          <button class="key fn" data-k="INV">1/x</button>
+          <button class="key fn" data-k="Ans">Ans</button>
+          <button class="key clr" data-k="AC">AC</button>
+          <button class="key fn" data-k="DEL" aria-label="Backspace">⌫</button>
+
+          <button class="key" data-k="7">7</button>
+          <button class="key" data-k="8">8</button>
+          <button class="key" data-k="9">9</button>
+          <button class="key op" data-k="÷">÷</button>
+          <button class="key op" data-k="%">%</button>
+
+          <button class="key" data-k="4">4</button>
+          <button class="key" data-k="5">5</button>
+          <button class="key" data-k="6">6</button>
+          <button class="key op" data-k="×">×</button>
+          <button class="key op" data-k="−">−</button>
+
+          <button class="key" data-k="1">1</button>
+          <button class="key" data-k="2">2</button>
+          <button class="key" data-k="3">3</button>
+          <button class="key op" data-k="+" style="grid-row:span 2">+</button>
+          <button class="key eq" data-k="=" style="grid-row:span 2">=</button>
+
+          <button class="key" data-k="NEG" aria-label="Change sign">±</button>
+          <button class="key" data-k="0">0</button>
+          <button class="key" data-k=".">.</button>
+        </div>
+        <p class="hint">Type on your keyboard: numbers, <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd> <kbd>/</kbd> <kbd>^</kbd> <kbd>%</kbd> <kbd>(</kbd> <kbd>)</kbd>, <kbd>Enter</kbd> to calculate, <kbd>Esc</kbd> to clear. <span class="code">200 + 21%</span> gives 242.</p>
+      </div>
+
+      <aside class="panel side" aria-label="History">
+        <div class="side-head">
+          <span class="label">History</span>
+          <button class="linkbtn" id="btn-clear-history">Clear</button>
+        </div>
+        <ul class="history" id="history"></ul>
+        <div class="side-head" style="margin-top:auto">
+          <span class="label">Memory</span>
+          <span class="h-res" id="mem-value">0</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═════════ CURRENCY ═════════ -->
+  <section id="view-currency" role="tabpanel" aria-labelledby="tab-currency" hidden>
+    <div class="panel conv">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <span class="status example" id="fx-status">Example rates</span>
+        <button class="btn" id="btn-fx-refresh">Get live rates</button>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1 1 180px">
+          <label for="fx-amount">Amount</label>
+          <input class="input" id="fx-amount" inputmode="decimal" autocomplete="off" value="1000"/>
+        </div>
+        <div class="field">
+          <label for="fx-from">From</label>
+          <select class="select" id="fx-from"></select>
+        </div>
+        <button class="swap" id="fx-swap" aria-label="Swap currencies" title="Swap">⇄</button>
+        <div class="field">
+          <label for="fx-to">To</label>
+          <select class="select" id="fx-to"></select>
+        </div>
+      </div>
+      <div class="answer">
+        <div>
+          <div class="answer-val" id="fx-result">—</div>
+          <div class="answer-sub" id="fx-rate-line"></div>
+        </div>
+        <button class="btn" id="fx-copy">Copy</button>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:0 1 260px">
+          <label for="fx-custom">Use your own rate (optional)</label>
+          <input class="input" id="fx-custom" inputmode="decimal" autocomplete="off" placeholder="e.g. rate from your bank"/>
+        </div>
+        <p class="note" id="fx-note" style="margin:0;flex:1 1 280px"></p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Currency</th><th></th><th style="text-align:right" id="fx-table-head">Converted</th><th style="text-align:right">Rate</th></tr></thead>
+          <tbody id="fx-table"></tbody>
+        </table>
+      </div>
+
+      <details id="fx-edit">
+        <summary>Edit rates (per 1 EUR)</summary>
+        <p class="note">Change any rate and it is saved in this browser. Getting live rates replaces your edits.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Currency</th><th></th><th style="text-align:right">1 EUR =</th></tr></thead>
+            <tbody id="fx-edit-table"></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btn-fx-reset">Reset to example rates</button></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ═════════ UNITS ═════════ -->
+  <section id="view-units" role="tabpanel" aria-labelledby="tab-units" hidden>
+    <div class="panel conv">
+      <div class="chips" id="unit-cats" role="group" aria-label="Unit category"></div>
+      <div class="row">
+        <div class="field" style="flex:1 1 180px">
+          <label for="u-value">Value</label>
+          <input class="input" id="u-value" inputmode="decimal" autocomplete="off" value="1"/>
+        </div>
+        <div class="field">
+          <label for="u-from">From</label>
+          <select class="select" id="u-from"></select>
+        </div>
+        <button class="swap" id="u-swap" aria-label="Swap units" title="Swap">⇄</button>
+        <div class="field">
+          <label for="u-to">To</label>
+          <select class="select" id="u-to"></select>
+        </div>
+      </div>
+      <div class="answer">
+        <div>
+          <div class="answer-val" id="u-result">—</div>
+          <div class="answer-sub" id="u-line"></div>
+        </div>
+        <button class="btn" id="u-copy">Copy</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Unit</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody id="u-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ PERCENT & VAT ═════════ -->
+  <section id="view-percent" role="tabpanel" aria-labelledby="tab-percent" hidden>
+    <div class="split">
+      <div class="panel card">
+        <h2>VAT (BTW)</h2>
+        <div class="row">
+          <div class="field">
+            <label for="vat-amount">Amount</label>
+            <input class="input" id="vat-amount" inputmode="decimal" autocomplete="off" value="1250"/>
+          </div>
+          <div class="field" style="flex:0 1 110px">
+            <label for="vat-rate">Rate %</label>
+            <input class="input" id="vat-rate" inputmode="decimal" autocomplete="off" value="21"/>
+          </div>
+        </div>
+        <div class="chips" id="vat-presets" role="group" aria-label="VAT rate presets">
+          <button class="chip" data-rate="21">21% NL standard</button>
+          <button class="chip" data-rate="9">9% NL reduced</button>
+          <button class="chip" data-rate="19">19% DE</button>
+          <button class="chip" data-rate="20">20% UK</button>
+          <button class="chip" data-rate="0">0%</button>
+        </div>
+        <div class="chips" role="group" aria-label="Amount includes VAT?">
+          <button class="chip" id="vat-excl" aria-pressed="true">Amount excludes VAT</button>
+          <button class="chip" id="vat-incl" aria-pressed="false">Amount includes VAT</button>
+        </div>
+        <div class="vat-grid">
+          <div class="vat-cell"><div class="label">Net</div><div class="mini" id="vat-net">—</div></div>
+          <div class="vat-cell"><div class="label">VAT</div><div class="mini" id="vat-tax">—</div></div>
+          <div class="vat-cell"><div class="label">Gross</div><div class="mini" id="vat-gross">—</div></div>
+        </div>
+      </div>
+
+      <div class="panel card">
+        <h2>Percentage of</h2>
+        <div class="row">
+          <div class="field"><label for="p1-a">Percent</label><input class="input" id="p1-a" inputmode="decimal" value="15"/></div>
+          <div class="field"><label for="p1-b">of value</label><input class="input" id="p1-b" inputmode="decimal" value="480"/></div>
+        </div>
+        <div class="mini" id="p1-out">—</div>
+      </div>
+
+      <div class="panel card">
+        <h2>What percent is it?</h2>
+        <div class="row">
+          <div class="field"><label for="p2-a">Part</label><input class="input" id="p2-a" inputmode="decimal" value="36"/></div>
+          <div class="field"><label for="p2-b">of total</label><input class="input" id="p2-b" inputmode="decimal" value="240"/></div>
+        </div>
+        <div class="mini" id="p2-out">—</div>
+      </div>
+
+      <div class="panel card">
+        <h2>Percentage change</h2>
+        <div class="row">
+          <div class="field"><label for="p3-a">From</label><input class="input" id="p3-a" inputmode="decimal" value="1840"/></div>
+          <div class="field"><label for="p3-b">To</label><input class="input" id="p3-b" inputmode="decimal" value="2116"/></div>
+        </div>
+        <div class="mini" id="p3-out">—</div>
+      </div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('sunrise-calc:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('sunrise-calc:' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+  };
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function copy(text) {
+    const done = () => toast('Copied ' + text);
+    try {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+    } catch (e) { fallbackCopy(text, done); }
+  }
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.append(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('Select the value to copy it'); }
+    ta.remove();
+  }
+
+  /** Parse user-typed numbers: accepts "1,234.5", "1.234,5", "1 234,5". */
+  function parseNum(s) {
+    s = String(s).trim().replace(/[\s ']/g, '');
+    if (!s) return NaN;
+    const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
+    if (lastComma > -1 && lastDot > -1) {
+      s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+    } else if (lastComma > -1) {
+      // "1,5" → decimal comma; "1,234" or "1,234,567" → thousands
+      s = /^-?\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');
+    }
+    return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
+  }
+
+  const grouped = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  function fmtMoney(n) { return isFinite(n) ? grouped.format(n) : '—'; }
+  function fmtSig(n, sig) {
+    if (!isFinite(n)) return '—';
+    if (n === 0) return '0';
+    const a = Math.abs(n);
+    if (a >= 1e15 || a < 1e-9) return n.toExponential(Math.min(sig, 10) - 1).replace(/\.?0+e/, 'e');
+    const p = Number(n.toPrecision(sig));
+    return p.toLocaleString('en-US', { maximumFractionDigits: 12 });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  TABS
+  // ══════════════════════════════════════════════════════════
+  const TABS = ['calculator', 'currency', 'units', 'percent'];
+  let activeTab = 'calculator';
+  function setTab(name, focus) {
+    if (!TABS.includes(name)) name = 'calculator';
+    activeTab = name;
+    for (const t of TABS) {
+      $('view-' + t).hidden = t !== name;
+      const b = $('tab-' + t);
+      b.setAttribute('aria-selected', t === name ? 'true' : 'false');
+      b.tabIndex = t === name ? 0 : -1;
+    }
+    store.set('tab', name);
+    if (focus) $('tab-' + name).focus();
+  }
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  document.querySelector('.tabs').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const i = TABS.indexOf(activeTab);
+    setTab(TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length], true);
+  });
+
+  // ══════════════════════════════════════════════════════════
+  //  EXPRESSION PARSER — no eval()
+  // ══════════════════════════════════════════════════════════
+  const FUNCS = {
+    sin: 1, cos: 1, tan: 1, asin: 1, acos: 1, atan: 1, ln: 1, log: 1, sqrt: 1, abs: 1
+  };
+
+  function tokenize(src) {
+    const out = [];
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === ' ') { i++; continue; }
+      if (/[0-9.]/.test(c)) {
+        let j = i;
+        while (j < src.length && /[0-9.]/.test(src[j])) j++;
+        if (/[eE]/.test(src[j] || '') && /[0-9+\-]/.test(src[j + 1] || '') &&
+            (/[0-9]/.test(src[j + 1]) || /[0-9]/.test(src[j + 2] || ''))) {
+          j += 2;
+          while (j < src.length && /[0-9]/.test(src[j])) j++;
+        }
+        const txt = src.slice(i, j);
+        if ((txt.match(/\./g) || []).length > 1) throw new Error('Too many decimal points');
+        out.push({ t: 'num', v: Number(txt) });
+        i = j; continue;
+      }
+      if (/[a-zA-Z]/.test(c)) {
+        let j = i;
+        while (j < src.length && /[a-zA-Z]/.test(src[j])) j++;
+        out.push({ t: 'id', v: src.slice(i, j) });
+        i = j; continue;
+      }
+      const map = { '×': '*', '·': '*', '÷': '/', '−': '-', '–': '-', '√': 'sqrt', 'π': 'pi' };
+      const m = map[c] || c;
+      if (m === 'sqrt' || m === 'pi') out.push({ t: 'id', v: m });
+      else if ('+-*/^%!()'.includes(m)) out.push({ t: 'op', v: m });
+      else throw new Error('Unknown symbol “' + c + '”');
+      i++;
+    }
+    return out;
+  }
+
+  function evaluate(src, ctx) {
+    const toks = tokenize(src);
+    let p = 0;
+    const peek = () => toks[p];
+    const isOp = v => toks[p] && toks[p].t === 'op' && toks[p].v === v;
+    const toRad = x => ctx.deg ? x * Math.PI / 180 : x;
+    const fromRad = x => ctx.deg ? x * 180 / Math.PI : x;
+
+    function expr() {
+      let left = term().v;
+      while (isOp('+') || isOp('-')) {
+        const op = toks[p++].v;
+        const r = term();
+        // "a + b%" means a plus b percent of a
+        const rv = r.pct ? left * r.v : r.v;
+        left = op === '+' ? left + rv : left - rv;
+      }
+      return left;
+    }
+    function term() {
+      let res = unary();
+      for (;;) {
+        const t = peek();
+        if (isOp('*') || isOp('/')) {
+          const op = toks[p++].v;
+          const r = unary().v;
+          if (op === '/' && r === 0) throw new Error('Cannot divide by zero');
+          res = { v: op === '*' ? res.v * r : res.v / r, pct: false };
+        } else if (t && (t.t === 'num' || t.t === 'id' || (t.t === 'op' && t.v === '('))) {
+          res = { v: res.v * unary().v, pct: false };   // implicit multiplication: 2π, 3(4)
+        } else break;
+      }
+      return res;
+    }
+    function unary() {
+      if (isOp('-')) { p++; const u = unary(); return { v: -u.v, pct: u.pct }; }
+      if (isOp('+')) { p++; return unary(); }
+      return power();
+    }
+    function power() {
+      const base = postfix();
+      if (isOp('^')) {
+        p++;
+        const ex = unary().v;
+        const v = Math.pow(base.v, ex);
+        if (isNaN(v)) throw new Error('Result is not a real number');
+        return { v, pct: false };
+      }
+      return base;
+    }
+    function postfix() {
+      let r = { v: primary(), pct: false };
+      for (;;) {
+        if (isOp('!')) { p++; r = { v: factorial(r.v), pct: false }; }
+        else if (isOp('%')) { p++; r = { v: r.v / 100, pct: true }; }
+        else break;
+      }
+      return r;
+    }
+    function primary() {
+      const t = toks[p];
+      if (!t) throw new Error('Expression is incomplete');
+      if (t.t === 'num') { p++; return t.v; }
+      if (t.t === 'op' && t.v === '(') {
+        p++;
+        const v = expr();
+        if (isOp(')')) p++;          // tolerate unclosed brackets at the end
+        else if (p < toks.length) throw new Error('Missing “)”');
+        return v;
+      }
+      if (t.t === 'id') {
+        p++;
+        const name = t.v.toLowerCase();
+        if (name === 'pi') return Math.PI;
+        if (t.v === 'e') return Math.E;
+        if (name === 'ans') return ctx.ans;
+        if (FUNCS[name]) {
+          const x = (isOp('(')) ? primary() : postfix().v;
+          return applyFn(name, x);
+        }
+        throw new Error('Unknown name “' + t.v + '”');
+      }
+      throw new Error('Unexpected “' + t.v + '”');
+    }
+    function applyFn(name, x) {
+      let v;
+      switch (name) {
+        case 'sin': v = Math.sin(toRad(x)); break;
+        case 'cos': v = Math.cos(toRad(x)); break;
+        case 'tan':
+          if (ctx.deg && Math.abs(((x % 180) + 180) % 180 - 90) < 1e-12) throw new Error('tan is undefined here');
+          v = Math.tan(toRad(x)); break;
+        case 'asin': v = fromRad(Math.asin(x)); break;
+        case 'acos': v = fromRad(Math.acos(x)); break;
+        case 'atan': v = fromRad(Math.atan(x)); break;
+        case 'ln': v = Math.log(x); break;
+        case 'log': v = Math.log10(x); break;
+        case 'sqrt': v = Math.sqrt(x); break;
+        case 'abs': v = Math.abs(x); break;
+      }
+      if (isNaN(v)) throw new Error(name + ' is undefined for ' + fmtSig(x, 8));
+      // clean floating noise such as sin(180°) = 1.2e-16
+      if (['sin', 'cos', 'tan'].includes(name) && Math.abs(v) < 1e-12) v = 0;
+      return v;
+    }
+    function factorial(n) {
+      if (n < 0 || !Number.isInteger(n)) throw new Error('n! needs a whole number ≥ 0');
+      if (n > 170) return Infinity;
+      let r = 1;
+      for (let i = 2; i <= n; i++) r *= i;
+      return r;
+    }
+
+    if (!toks.length) return null;
+    const v = expr();
+    if (p < toks.length) throw new Error('Unexpected “' + toks[p].v + '”');
+    if (!isFinite(v)) throw new Error(isNaN(v) ? 'Not a number' : 'Result is too large');
+    return v;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CALCULATOR UI
+  // ══════════════════════════════════════════════════════════
+  const calc = {
+    expr: '',
+    ans: store.get('ans', 0),
+    mem: store.get('mem', 0),
+    deg: store.get('deg', true),
+    justEvaluated: false,
+    history: store.get('history', [
+      { e: '1840 × 1.15', r: '2,116' },
+      { e: '200 + 21%', r: '242' },
+      { e: '√(2)', r: '1.41421356237' }
+    ])
+  };
+
+  function resultText(v) { return fmtSig(v, 12); }
+  function plain(v) { return String(Number(v.toPrecision(12))); }
+
+  function renderCalc(final) {
+    $('expr').textContent = calc.expr;
+    $('expr').scrollLeft = 1e6;
+    const res = $('result');
+    res.className = 'result';
+    if (!calc.expr) { res.textContent = calc.justEvaluated ? resultText(calc.ans) : '0'; return; }
+    try {
+      const v = evaluate(calc.expr, calc);
+      if (v === null) { res.textContent = '0'; return; }
+      res.textContent = resultText(v);
+      if (!final) res.classList.add('preview');
+    } catch (err) {
+      if (final) { res.textContent = err.message; res.classList.add('error'); }
+      else { res.textContent = ''; }
+    }
+    $('flag-angle').textContent = calc.deg ? 'DEG' : 'RAD';
+  }
+
+  function renderSide() {
+    const ul = $('history');
+    ul.replaceChildren();
+    if (!calc.history.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Calculations you finish appear here. Tap one to reuse it.';
+      ul.append(li);
+    }
+    for (const h of calc.history) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      const e = document.createElement('span'); e.className = 'h-expr'; e.textContent = h.e;
+      const r = document.createElement('span'); r.className = 'h-res'; r.textContent = '= ' + h.r;
+      b.append(e, r);
+      b.title = 'Use this result';
+      b.addEventListener('click', () => { calc.expr = h.r.replace(/,/g, ''); calc.justEvaluated = false; renderCalc(); });
+      li.append(b);
+      ul.append(li);
+    }
+    $('mem-value').textContent = resultText(calc.mem);
+    $('flag-mem').classList.toggle('off', calc.mem === 0);
+    $('flag-angle').textContent = calc.deg ? 'DEG' : 'RAD';
+  }
+
+  function currentValue() {
+    if (!calc.expr) return calc.justEvaluated ? calc.ans : 0;
+    try { const v = evaluate(calc.expr, calc); return v == null ? 0 : v; } catch (e) { return null; }
+  }
+
+  function press(k) {
+    const OPS = ['+', '−', '×', '÷', '^', '%', '!', '^2'];
+    if (k === '=') {
+      if (!calc.expr) return;
+      try {
+        const v = evaluate(calc.expr, calc);
+        if (v === null) return;
+        calc.history.unshift({ e: calc.expr, r: resultText(v) });
+        calc.history = calc.history.slice(0, 30);
+        calc.ans = v;
+        calc.expr = '';
+        calc.justEvaluated = true;
+        store.set('history', calc.history); store.set('ans', v);
+        renderCalc(true); renderSide();
+      } catch (err) { renderCalc(true); }
+      return;
+    }
+    if (k === 'AC') { calc.expr = ''; calc.justEvaluated = false; renderCalc(); return; }
+    if (k === 'DEL') {
+      const m = calc.expr.match(/(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|ln\(|log\(|Ans|√\(|\^2)$/);
+      calc.expr = calc.expr.slice(0, calc.expr.length - (m ? m[0].length : 1));
+      renderCalc(); return;
+    }
+    if (k === 'ANGLE') { calc.deg = !calc.deg; store.set('deg', calc.deg); renderCalc(); renderSide(); return; }
+    if (k === 'MC') { calc.mem = 0; store.set('mem', 0); renderSide(); toast('Memory cleared'); return; }
+    if (k === 'MR') { insert(plainOrParen(calc.mem)); return; }
+    if (k === 'M+' || k === 'M-') {
+      const v = currentValue();
+      if (v === null) { toast('Fix the expression first'); return; }
+      calc.mem += k === 'M+' ? v : -v;
+      store.set('mem', calc.mem); renderSide();
+      toast('Memory = ' + resultText(calc.mem));
+      return;
+    }
+    if (k === 'INV') {
+      const v = currentValue();
+      if (v === null || v === 0) { toast(v === 0 ? 'Cannot divide by zero' : 'Fix the expression first'); return; }
+      const src = calc.expr || plain(calc.ans);
+      calc.expr = '1÷(' + src + ')';
+      calc.justEvaluated = false;
+      renderCalc(); return;
+    }
+    if (k === 'NEG') { toggleSign(); return; }
+
+    // Continue from the last answer when an operator follows "="
+    if (calc.justEvaluated) {
+      calc.justEvaluated = false;
+      if (OPS.includes(k)) calc.expr = plainOrParen(calc.ans);
+    }
+    if (OPS.includes(k) && ['+', '−', '×', '÷', '^'].includes(k)) {
+      // replace a dangling binary operator instead of stacking them (keep "×−" for negatives)
+      if (/[+×÷^]$/.test(calc.expr) && k !== '−') calc.expr = calc.expr.slice(0, -1);
+      else if (/−$/.test(calc.expr) && k !== '−') calc.expr = calc.expr.slice(0, -1);
+      if (!calc.expr && k !== '−') calc.expr = '0';
+    }
+    insert(k);
+  }
+
+  function plainOrParen(v) { const s = plain(v); return v < 0 ? '(' + s + ')' : s; }
+
+  function insert(s) {
+    if (calc.justEvaluated) calc.justEvaluated = false;
+    calc.expr += s;
+    renderCalc();
+  }
+
+  function toggleSign() {
+    if (calc.justEvaluated) { calc.expr = plainOrParen(-calc.ans); calc.justEvaluated = false; renderCalc(); return; }
+    const m = calc.expr.match(/(\(−)?(\d*\.?\d+)(\))?$/);
+    if (!m) { calc.expr += '−'; renderCalc(); return; }
+    const start = calc.expr.length - m[0].length;
+    calc.expr = calc.expr.slice(0, start) + (m[1] && m[3] ? m[2] : '(−' + m[2] + ')');
+    renderCalc();
+  }
+
+  $('keys').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) press(b.dataset.k); });
+  $('keys-mem').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) press(b.dataset.k); });
+  $('btn-clear-history').addEventListener('click', () => { calc.history = []; store.set('history', []); renderSide(); });
+
+  document.addEventListener('keydown', e => {
+    if (activeTab !== 'calculator' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    const map = { '*': '×', 'x': '×', '/': '÷', '-': '−', 'Enter': '=', '=': '=', 'Backspace': 'DEL', 'Escape': 'AC', 'Delete': 'AC', ',': '.' };
+    let k = map[e.key] || e.key;
+    if (e.key === 'Enter' && e.target.closest && e.target.closest('button') && !e.target.closest('#keys')) return;
+    if (/^[0-9.+()^%!]$/.test(k) || ['×', '÷', '−', '=', 'DEL', 'AC'].includes(k)) {
+      e.preventDefault();
+      if (e.key === 'Enter' && document.activeElement && document.activeElement.closest('#keys')) document.activeElement.blur();
+      press(k);
+      flashKey(k);
+    } else if (e.key === 'e') { press('e'); } else if (e.key === 'p') { press('π'); } else if (e.key === 's') { press('sin('); } else if (e.key === 'c') { press('cos('); } else if (e.key === 't') { press('tan('); } else if (e.key === 'l') { press('ln('); } else if (e.key === 'r') { press('√('); }
+  });
+  function flashKey(k) {
+    const b = document.querySelector('#keys [data-k="' + (k === '.' ? '.' : k.replace(/"/g, '')) + '"]');
+    if (!b || k === '=') return;
+    b.style.background = 'var(--op)';
+    setTimeout(() => { b.style.background = ''; }, 120);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CURRENCY
+  // ══════════════════════════════════════════════════════════
+  const CURRENCIES = {
+    EUR: 'Euro', USD: 'US dollar', GBP: 'British pound', CHF: 'Swiss franc', JPY: 'Japanese yen',
+    CNY: 'Chinese yuan', AUD: 'Australian dollar', CAD: 'Canadian dollar', NZD: 'New Zealand dollar',
+    SEK: 'Swedish krona', NOK: 'Norwegian krone', DKK: 'Danish krone', PLN: 'Polish złoty',
+    CZK: 'Czech koruna', HUF: 'Hungarian forint', RON: 'Romanian leu', TRY: 'Turkish lira',
+    ZAR: 'South African rand', INR: 'Indian rupee', SGD: 'Singapore dollar', HKD: 'Hong Kong dollar',
+    KRW: 'South Korean won', MXN: 'Mexican peso', BRL: 'Brazilian real'
+  };
+  // Approximate example values per 1 EUR, used only until live rates load.
+  // Shown with an "Example rates" warning. Replace with live or your own rates before relying on them.
+  const EXAMPLE_RATES = {
+    EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.93, JPY: 170, CNY: 8.3, AUD: 1.78, CAD: 1.61, NZD: 1.97,
+    SEK: 11.0, NOK: 11.7, DKK: 7.46, PLN: 4.26, CZK: 24.4, HUF: 390, RON: 5.07, TRY: 48,
+    ZAR: 20.4, INR: 102, SGD: 1.49, HKD: 9.1, KRW: 1620, MXN: 21.6, BRL: 6.3
+  };
+
+  const fx = {
+    rates: Object.assign({}, EXAMPLE_RATES),
+    source: 'example',          // 'example' | 'custom' | 'live'
+    date: '',
+    from: store.get('fxFrom', 'EUR'),
+    to: store.get('fxTo', 'USD')
+  };
+  const saved = store.get('fxRates', null);
+  if (saved && saved.rates) {
+    for (const c of Object.keys(CURRENCIES)) if (isFinite(saved.rates[c]) && saved.rates[c] > 0) fx.rates[c] = saved.rates[c];
+    fx.source = saved.source === 'live' ? 'live' : 'custom';
+    fx.date = saved.date || '';
+  }
+  if (!CURRENCIES[fx.from]) fx.from = 'EUR';
+  if (!CURRENCIES[fx.to]) fx.to = 'USD';
+
+  function fillCurrencySelect(sel, value) {
+    sel.replaceChildren();
+    for (const [c, n] of Object.entries(CURRENCIES)) {
+      const o = document.createElement('option');
+      o.value = c; o.textContent = c + ' · ' + n;
+      if (c === value) o.selected = true;
+      sel.append(o);
+    }
+  }
+  fillCurrencySelect($('fx-from'), fx.from);
+  fillCurrencySelect($('fx-to'), fx.to);
+
+  function rateFor(from, to) { return fx.rates[to] / fx.rates[from]; }
+  function fmtRate(r) { return r >= 100 ? r.toFixed(2) : r >= 1 ? r.toFixed(4) : r.toPrecision(4); }
+
+  function renderFx() {
+    const amount = parseNum($('fx-amount').value);
+    const custom = parseNum($('fx-custom').value);
+    const useCustom = isFinite(custom) && custom > 0;
+    const rate = useCustom ? custom : rateFor(fx.from, fx.to);
+    const out = amount * rate;
+
+    $('fx-result').textContent = isFinite(out) ? fmtMoney(out) + ' ' + fx.to : 'Enter an amount';
+    $('fx-rate-line').textContent = '1 ' + fx.from + ' = ' + fmtRate(rate) + ' ' + fx.to +
+      '  ·  1 ' + fx.to + ' = ' + fmtRate(1 / rate) + ' ' + fx.from + (useCustom ? '  ·  your rate' : '');
+
+    const st = $('fx-status');
+    if (fx.source === 'live') {
+      st.className = 'status live';
+      st.textContent = 'Live ECB reference rates' + (fx.date ? ' · ' + fx.date : '');
+      $('fx-note').textContent = 'Rates are European Central Bank reference rates, updated each working day around 16:00 CET. Banks and card providers add their own margin.';
+    } else {
+      st.className = 'status example';
+      st.textContent = fx.source === 'custom' ? 'Your edited rates' : 'Example rates · not live';
+      $('fx-note').textContent = fx.source === 'custom'
+        ? 'Using the rates you entered below. Select “Get live rates” to replace them with today’s ECB rates.'
+        : 'These are approximate example rates so the converter works offline. Select “Get live rates”, or enter your own rate, before using a result.';
+    }
+
+    const head = $('fx-table-head');
+    head.textContent = isFinite(amount) ? fmtMoney(amount) + ' ' + fx.from + ' =' : 'Converted';
+    const tb = $('fx-table');
+    tb.replaceChildren();
+    for (const [c, n] of Object.entries(CURRENCIES)) {
+      if (c === fx.from) continue;
+      const r = rateFor(fx.from, c);
+      const tr = document.createElement('tr');
+      tr.className = 'clickable';
+      tr.tabIndex = 0;
+      tr.title = 'Convert to ' + c;
+      const cells = [
+        ['code', c], ['cname', n],
+        ['num', isFinite(amount) ? fmtMoney(amount * r) : '—'],
+        ['num', fmtRate(r)]
+      ];
+      for (const [cls, txt] of cells) {
+        const td = document.createElement('td'); td.className = cls; td.textContent = txt; tr.append(td);
+      }
+      if (c === fx.to) tr.style.background = 'var(--accent-soft)';
+      const pick = () => { fx.to = c; $('fx-to').value = c; store.set('fxTo', c); $('fx-custom').value = ''; renderFx(); };
+      tr.addEventListener('click', pick);
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter') pick(); });
+      tb.append(tr);
+    }
+  }
+
+  function renderFxEdit() {
+    const tb = $('fx-edit-table');
+    tb.replaceChildren();
+    for (const [c, n] of Object.entries(CURRENCIES)) {
+      if (c === 'EUR') continue;
+      const tr = document.createElement('tr');
+      const a = document.createElement('td'); a.className = 'code'; a.textContent = c;
+      const b = document.createElement('td'); b.className = 'cname'; b.textContent = n;
+      const d = document.createElement('td'); d.className = 'num';
+      const inp = document.createElement('input');
+      inp.className = 'input rate-input'; inp.id = 'rate-' + c; inp.inputMode = 'decimal';
+      inp.value = String(fx.rates[c]);
+      inp.setAttribute('aria-label', 'Rate for ' + c + ' per euro');
+      inp.addEventListener('change', () => {
+        const v = parseNum(inp.value);
+        if (!(v > 0)) { inp.value = String(fx.rates[c]); toast('Enter a rate above zero'); return; }
+        fx.rates[c] = v; fx.source = 'custom'; fx.date = '';
+        store.set('fxRates', { rates: fx.rates, source: 'custom' });
+        renderFx();
+      });
+      d.append(inp);
+      tr.append(a, b, d);
+      tb.append(tr);
+    }
+  }
+
+  async function loadLiveRates(manual) {
+    const btn = $('btn-fx-refresh');
+    btn.disabled = true; btn.textContent = 'Loading…';
+    const urls = ['https://api.frankfurter.dev/v1/latest?base=EUR', 'https://api.frankfurter.app/latest?from=EUR'];
+    let ok = false;
+    for (const url of urls) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data || !data.rates) continue;
+        const next = { EUR: 1 };
+        for (const c of Object.keys(CURRENCIES)) {
+          if (c !== 'EUR' && isFinite(data.rates[c]) && data.rates[c] > 0) next[c] = data.rates[c];
+        }
+        for (const c of Object.keys(CURRENCIES)) if (!next[c]) next[c] = fx.rates[c];
+        fx.rates = next; fx.source = 'live'; fx.date = data.date || '';
+        store.set('fxRates', { rates: fx.rates, source: 'live', date: fx.date });
+        ok = true;
+        break;
+      } catch (e) { /* try next source */ }
+    }
+    btn.disabled = false; btn.textContent = ok ? 'Refresh live rates' : 'Get live rates';
+    if (ok) { renderFx(); renderFxEdit(); if (manual) toast('Live rates loaded' + (fx.date ? ' for ' + fx.date : '')); }
+    else if (manual) toast('Live rates could not be reached from here. Enter your own rate instead.');
+  }
+
+  $('fx-amount').addEventListener('input', renderFx);
+  $('fx-custom').addEventListener('input', renderFx);
+  $('fx-from').addEventListener('change', e => { fx.from = e.target.value; store.set('fxFrom', fx.from); $('fx-custom').value = ''; renderFx(); });
+  $('fx-to').addEventListener('change', e => { fx.to = e.target.value; store.set('fxTo', fx.to); $('fx-custom').value = ''; renderFx(); });
+  $('fx-swap').addEventListener('click', () => {
+    [fx.from, fx.to] = [fx.to, fx.from];
+    $('fx-from').value = fx.from; $('fx-to').value = fx.to;
+    store.set('fxFrom', fx.from); store.set('fxTo', fx.to);
+    const c = parseNum($('fx-custom').value);
+    if (c > 0) $('fx-custom').value = String(Number((1 / c).toPrecision(8)));
+    renderFx();
+  });
+  $('fx-copy').addEventListener('click', () => copy($('fx-result').textContent));
+  $('btn-fx-refresh').addEventListener('click', () => loadLiveRates(true));
+  $('btn-fx-reset').addEventListener('click', () => {
+    fx.rates = Object.assign({}, EXAMPLE_RATES); fx.source = 'example'; fx.date = '';
+    store.set('fxRates', null);
+    renderFx(); renderFxEdit(); toast('Example rates restored');
+  });
+
+  // ══════════════════════════════════════════════════════════
+  //  UNITS — factors to the category's base unit
+  // ══════════════════════════════════════════════════════════
+  const UNITS = {
+    Length: { base: 'm', units: {
+      'mm': ['Millimetre', 0.001], 'cm': ['Centimetre', 0.01], 'm': ['Metre', 1], 'km': ['Kilometre', 1000],
+      'in': ['Inch', 0.0254], 'ft': ['Foot', 0.3048], 'yd': ['Yard', 0.9144], 'mi': ['Mile', 1609.344], 'nmi': ['Nautical mile', 1852] } },
+    Mass: { base: 'kg', units: {
+      'mg': ['Milligram', 1e-6], 'g': ['Gram', 0.001], 'kg': ['Kilogram', 1], 't': ['Tonne', 1000],
+      'oz': ['Ounce', 0.028349523125], 'lb': ['Pound', 0.45359237], 'st': ['Stone', 6.35029318] } },
+    Temperature: { base: 'C', units: { 'C': ['Celsius (°C)'], 'F': ['Fahrenheit (°F)'], 'K': ['Kelvin (K)'] } },
+    Area: { base: 'm²', units: {
+      'cm²': ['Square centimetre', 1e-4], 'm²': ['Square metre', 1], 'ha': ['Hectare', 1e4], 'km²': ['Square kilometre', 1e6],
+      'in²': ['Square inch', 0.00064516], 'ft²': ['Square foot', 0.09290304], 'ac': ['Acre', 4046.8564224], 'mi²': ['Square mile', 2589988.110336] } },
+    Volume: { base: 'L', units: {
+      'mL': ['Millilitre', 0.001], 'L': ['Litre', 1], 'm³': ['Cubic metre', 1000], 'tsp': ['Teaspoon (US)', 0.00492892159375],
+      'tbsp': ['Tablespoon (US)', 0.01478676478125], 'cup': ['Cup (US)', 0.2365882365], 'fl oz': ['Fluid ounce (US)', 0.0295735295625],
+      'gal': ['Gallon (US)', 3.785411784], 'gal UK': ['Gallon (UK)', 4.54609] } },
+    Speed: { base: 'm/s', units: {
+      'm/s': ['Metres per second', 1], 'km/h': ['Kilometres per hour', 1 / 3.6], 'mph': ['Miles per hour', 0.44704], 'kn': ['Knot', 1852 / 3600] } },
+    Time: { base: 's', units: {
+      'ms': ['Millisecond', 0.001], 's': ['Second', 1], 'min': ['Minute', 60], 'h': ['Hour', 3600], 'd': ['Day', 86400],
+      'wk': ['Week', 604800], 'yr': ['Year (365 d)', 31536000] } },
+    Data: { base: 'B', units: {
+      'bit': ['Bit', 0.125], 'B': ['Byte', 1], 'KB': ['Kilobyte (1000)', 1e3], 'MB': ['Megabyte', 1e6], 'GB': ['Gigabyte', 1e9], 'TB': ['Terabyte', 1e12],
+      'KiB': ['Kibibyte (1024)', 1024], 'MiB': ['Mebibyte', 1048576], 'GiB': ['Gibibyte', 1073741824], 'TiB': ['Tebibyte', 1099511627776] } },
+    Pressure: { base: 'Pa', units: {
+      'Pa': ['Pascal', 1], 'kPa': ['Kilopascal', 1000], 'bar': ['Bar', 1e5], 'psi': ['Pound per sq inch', 6894.757293168], 'atm': ['Atmosphere', 101325], 'mmHg': ['Millimetre of mercury', 133.322387415] } },
+    Energy: { base: 'J', units: {
+      'J': ['Joule', 1], 'kJ': ['Kilojoule', 1000], 'cal': ['Calorie', 4.184], 'kcal': ['Kilocalorie', 4184], 'Wh': ['Watt-hour', 3600], 'kWh': ['Kilowatt-hour', 3.6e6], 'BTU': ['British thermal unit', 1055.05585262] } }
+  };
+  const UNIT_DEFAULTS = {
+    Length: ['km', 'mi'], Mass: ['kg', 'lb'], Temperature: ['C', 'F'], Area: ['m²', 'ft²'], Volume: ['L', 'gal'],
+    Speed: ['km/h', 'mph'], Time: ['h', 'min'], Data: ['GB', 'GiB'], Pressure: ['bar', 'psi'], Energy: ['kWh', 'kJ']
+  };
+  const u = { cat: store.get('uCat', 'Length'), from: '', to: '' };
+  if (!UNITS[u.cat]) u.cat = 'Length';
+
+  function toBase(cat, unit, v) {
+    if (cat === 'Temperature') return unit === 'C' ? v : unit === 'F' ? (v - 32) * 5 / 9 : v - 273.15;
+    return v * UNITS[cat].units[unit][1];
+  }
+  function fromBase(cat, unit, v) {
+    if (cat === 'Temperature') return unit === 'C' ? v : unit === 'F' ? v * 9 / 5 + 32 : v + 273.15;
+    return v / UNITS[cat].units[unit][1];
+  }
+
+  function buildUnitCats() {
+    const box = $('unit-cats');
+    box.replaceChildren();
+    for (const c of Object.keys(UNITS)) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = c;
+      b.setAttribute('aria-pressed', c === u.cat ? 'true' : 'false');
+      b.addEventListener('click', () => { setUnitCat(c); });
+      box.append(b);
+    }
+  }
+  function fillUnitSelect(sel, value) {
+    sel.replaceChildren();
+    for (const [k, [name]] of Object.entries(UNITS[u.cat].units)) {
+      const o = document.createElement('option');
+      o.value = k; o.textContent = name + ' (' + k + ')';
+      if (k === value) o.selected = true;
+      sel.append(o);
+    }
+  }
+  function setUnitCat(c) {
+    u.cat = c; store.set('uCat', c);
+    [u.from, u.to] = UNIT_DEFAULTS[c];
+    buildUnitCats();
+    fillUnitSelect($('u-from'), u.from);
+    fillUnitSelect($('u-to'), u.to);
+    renderUnits();
+  }
+  function tempSym(k) { return k === 'K' ? 'K' : '°' + k; }
+  function sym(k) { return u.cat === 'Temperature' ? tempSym(k) : k; }
+
+  function renderUnits() {
+    const v = parseNum($('u-value').value);
+    const base = toBase(u.cat, u.from, v);
+    const out = fromBase(u.cat, u.to, base);
+    $('u-result').textContent = isFinite(out) ? fmtSig(out, 10) + ' ' + sym(u.to) : 'Enter a value';
+    const one = fromBase(u.cat, u.to, toBase(u.cat, u.from, 1));
+    $('u-line').textContent = u.cat === 'Temperature'
+      ? (isFinite(v) ? fmtSig(v, 10) + ' ' + sym(u.from) + ' = ' + fmtSig(out, 10) + ' ' + sym(u.to) : '')
+      : '1 ' + u.from + ' = ' + fmtSig(one, 10) + ' ' + u.to;
+    const tb = $('u-table');
+    tb.replaceChildren();
+    for (const [k, [name]] of Object.entries(UNITS[u.cat].units)) {
+      const tr = document.createElement('tr');
+      tr.className = 'clickable'; tr.tabIndex = 0;
+      const a = document.createElement('td'); a.textContent = name + ' (' + sym(k) + ')';
+      const b = document.createElement('td'); b.className = 'num';
+      b.textContent = isFinite(base) ? fmtSig(fromBase(u.cat, k, base), 10) : '—';
+      if (k === u.to) tr.style.background = 'var(--accent-soft)';
+      const pick = () => { u.to = k; $('u-to').value = k; renderUnits(); };
+      tr.addEventListener('click', pick);
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter') pick(); });
+      tr.append(a, b);
+      tb.append(tr);
+    }
+  }
+  $('u-value').addEventListener('input', renderUnits);
+  $('u-from').addEventListener('change', e => { u.from = e.target.value; renderUnits(); });
+  $('u-to').addEventListener('change', e => { u.to = e.target.value; renderUnits(); });
+  $('u-swap').addEventListener('click', () => {
+    [u.from, u.to] = [u.to, u.from];
+    $('u-from').value = u.from; $('u-to').value = u.to; renderUnits();
+  });
+  $('u-copy').addEventListener('click', () => copy($('u-result').textContent));
+
+  // ══════════════════════════════════════════════════════════
+  //  PERCENT & VAT
+  // ══════════════════════════════════════════════════════════
+  let vatIncl = false;
+  function renderPercent() {
+    const amt = parseNum($('vat-amount').value), rate = parseNum($('vat-rate').value);
+    let net, tax, gross;
+    if (isFinite(amt) && isFinite(rate) && rate >= 0) {
+      if (vatIncl) { gross = amt; net = amt / (1 + rate / 100); tax = gross - net; }
+      else { net = amt; tax = amt * rate / 100; gross = net + tax; }
+    }
+    $('vat-net').textContent = fmtMoney(net);
+    $('vat-tax').textContent = fmtMoney(tax);
+    $('vat-gross').textContent = fmtMoney(gross);
+    document.querySelectorAll('#vat-presets .chip').forEach(c =>
+      c.setAttribute('aria-pressed', parseNum(c.dataset.rate) === rate ? 'true' : 'false'));
+    $('vat-excl').setAttribute('aria-pressed', vatIncl ? 'false' : 'true');
+    $('vat-incl').setAttribute('aria-pressed', vatIncl ? 'true' : 'false');
+
+    const a1 = parseNum($('p1-a').value), b1 = parseNum($('p1-b').value);
+    $('p1-out').textContent = isFinite(a1 * b1) ? fmtSig(a1 / 100 * b1, 10) : '—';
+
+    const a2 = parseNum($('p2-a').value), b2 = parseNum($('p2-b').value);
+    $('p2-out').textContent = isFinite(a2) && isFinite(b2) && b2 !== 0 ? fmtSig(a2 / b2 * 100, 8) + '%' : '—';
+
+    const a3 = parseNum($('p3-a').value), b3 = parseNum($('p3-b').value);
+    if (isFinite(a3) && isFinite(b3) && a3 !== 0) {
+      const ch = (b3 - a3) / Math.abs(a3) * 100;
+      $('p3-out').textContent = (ch > 0 ? '+' : '') + fmtSig(ch, 8) + '%  (' + (b3 - a3 >= 0 ? '+' : '') + fmtSig(b3 - a3, 10) + ')';
+    } else $('p3-out').textContent = '—';
+  }
+  ['vat-amount', 'vat-rate', 'p1-a', 'p1-b', 'p2-a', 'p2-b', 'p3-a', 'p3-b'].forEach(id => $(id).addEventListener('input', renderPercent));
+  $('vat-presets').addEventListener('click', e => {
+    const c = e.target.closest('[data-rate]'); if (!c) return;
+    $('vat-rate').value = c.dataset.rate; renderPercent();
+  });
+  $('vat-excl').addEventListener('click', () => { vatIncl = false; renderPercent(); });
+  $('vat-incl').addEventListener('click', () => { vatIncl = true; renderPercent(); });
+
+  // ══════════════════════════════════════════════════════════
+  //  START
+  // ══════════════════════════════════════════════════════════
+  const hash = (location.hash || '').slice(1);
+  setTab(TABS.includes(hash) ? hash : store.get('tab', 'calculator'));
+  calc.expr = '1840 × 1.15';
+  renderCalc(); renderSide();
+  renderFx(); renderFxEdit();
+  setUnitCat(u.cat);
+  renderPercent();
+  loadLiveRates(false);
+})();
+</script>
+</body>
+</html>
